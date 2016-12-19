@@ -37,7 +37,7 @@ func (cfg *Config) Set(path string, val interface{}) error {
 	return Set(cfg.Root, path, val)
 }
 
-// Fetch data from system env, based on existing config keys.
+// Env data from system env, based on existing config keys.
 func (cfg *Config) Env() *Config {
 	keys := getKeys(cfg.Root)
 	for _, key := range keys {
@@ -48,7 +48,7 @@ func (cfg *Config) Env() *Config {
 	return cfg
 }
 
-// Parse command line arguments, based on existing config keys.
+// Flag command line arguments, based on existing config keys.
 func (cfg *Config) Flag() *Config {
 	keys := getKeys(cfg.Root)
 	hash := map[string]*string{}
@@ -112,9 +112,9 @@ func (cfg *Config) Bool(path string) (bool, error) {
 	return false, typeMismatch("bool or string", n)
 }
 
-// UBool retirns a bool according to a dotted path or default value or false.
-func (c *Config) UBool(path string, defaults ...bool) bool {
-	value, err := c.Bool(path)
+// MustBool retirns a bool according to a dotted path or default value or false.
+func (cfg *Config) MustBool(path string, defaults ...bool) bool {
+	value, err := cfg.Bool(path)
 
 	if err == nil {
 		return value
@@ -143,9 +143,9 @@ func (cfg *Config) Float64(path string) (float64, error) {
 	return 0, typeMismatch("float64, int or string", n)
 }
 
-// UFloat64 returns a float64 according to a dotted path or default value or 0.
-func (c *Config) UFloat64(path string, defaults ...float64) float64 {
-	value, err := c.Float64(path)
+// MustFloat64 returns a float64 according to a dotted path or default value or 0.
+func (cfg *Config) MustFloat64(path string, defaults ...float64) float64 {
+	value, err := cfg.Float64(path)
 
 	if err == nil {
 		return value
@@ -184,9 +184,9 @@ func (cfg *Config) Int(path string) (int, error) {
 	return 0, typeMismatch("float64, int or string", n)
 }
 
-// UInt returns an int according to a dotted path or default value or 0.
-func (c *Config) UInt(path string, defaults ...int) int {
-	value, err := c.Int(path)
+// MustInt returns an int according to a dotted path or default value or 0.
+func (cfg *Config) MustInt(path string, defaults ...int) int {
+	value, err := cfg.Int(path)
 
 	if err == nil {
 		return value
@@ -210,9 +210,9 @@ func (cfg *Config) List(path string) ([]interface{}, error) {
 	return nil, typeMismatch("[]interface{}", n)
 }
 
-// UList returns a []interface{} according to a dotted path or defaults or []interface{}.
-func (c *Config) UList(path string, defaults ...[]interface{}) []interface{} {
-	value, err := c.List(path)
+// MustList returns a []interface{} according to a dotted path or defaults or []interface{}.
+func (cfg *Config) MustList(path string, defaults ...[]interface{}) []interface{} {
+	value, err := cfg.List(path)
 
 	if err == nil {
 		return value
@@ -236,9 +236,9 @@ func (cfg *Config) Map(path string) (map[string]interface{}, error) {
 	return nil, typeMismatch("map[string]interface{}", n)
 }
 
-// UMap returns a map[string]interface{} according to a dotted path or default or map[string]interface{}.
-func (c *Config) UMap(path string, defaults ...map[string]interface{}) map[string]interface{} {
-	value, err := c.Map(path)
+// MustMap returns a map[string]interface{} according to a dotted path or default or map[string]interface{}.
+func (cfg *Config) MustMap(path string, defaults ...map[string]interface{}) map[string]interface{} {
+	value, err := cfg.Map(path)
 
 	if err == nil {
 		return value
@@ -265,9 +265,9 @@ func (cfg *Config) String(path string) (string, error) {
 	return "", typeMismatch("bool, float64, int or string", n)
 }
 
-// UString returns a string according to a dotted path or default or "".
-func (c *Config) UString(path string, defaults ...string) string {
-	value, err := c.String(path)
+// MustString returns a string according to a dotted path or default or "".
+func (cfg *Config) MustString(path string, defaults ...string) string {
+	value, err := cfg.String(path)
 
 	if err == nil {
 		return value
@@ -280,7 +280,7 @@ func (c *Config) UString(path string, defaults ...string) string {
 }
 
 // Copy returns a deep copy with given path or without.
-func (c *Config) Copy(dottedPath ...string) (*Config, error) {
+func (cfg *Config) Copy(dottedPath ...string) (*Config, error) {
 	toJoin := []string{}
 	for _, part := range dottedPath {
 		if len(part) != 0 {
@@ -290,35 +290,34 @@ func (c *Config) Copy(dottedPath ...string) (*Config, error) {
 
 	var err error
 	var path = strings.Join(toJoin, ".")
-	var cfg = c
 	var root = ""
 
 	if len(path) > 0 {
-		if cfg, err = c.Get(path); err != nil {
+		if cfg, err = cfg.Get(path); err != nil {
 			return nil, err
 		}
 	}
 
-	if root, err = RenderYaml(cfg.Root); err != nil {
+	if root, err = RenderYAML(cfg.Root); err != nil {
 		return nil, err
 	}
-	return ParseYaml(root)
+	return ParseYAML(root)
 }
 
 // Extend returns extended copy of current config with applied
 // values from the given config instance. Note that if you extend
 // with different structure you will get an error. See: `.Set()` method
 // for details.
-func (c *Config) Extend(cfg *Config) (*Config, error) {
-	n, err := c.Copy()
+func (cfg *Config) Extend(from *Config) (*Config, error) {
+	n, err := cfg.Copy()
 	if err != nil {
 		return nil, err
 	}
 
-	keys := getKeys(cfg.Root)
+	keys := getKeys(from.Root)
 	for _, key := range keys {
 		k := strings.Join(key, ".")
-		i, err := Get(cfg.Root, k)
+		i, err := Get(from.Root, k)
 		if err != nil {
 			return nil, err
 		}
@@ -517,22 +516,22 @@ func normalizeValue(value interface{}) (interface{}, error) {
 
 // JSON -----------------------------------------------------------------------
 
-// ParseJson reads a JSON configuration from the given string.
-func ParseJson(cfg string) (*Config, error) {
-	return parseJson([]byte(cfg))
+// ParseJSON reads a JSON configuration from the given string.
+func ParseJSON(cfg string) (*Config, error) {
+	return parseJSON([]byte(cfg))
 }
 
-// ParseJsonFile reads a JSON configuration from the given filename.
-func ParseJsonFile(filename string) (*Config, error) {
+// ParseJSONFile reads a JSON configuration from the given filename.
+func ParseJSONFile(filename string) (*Config, error) {
 	cfg, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
-	return parseJson(cfg)
+	return parseJSON(cfg)
 }
 
-// parseJson performs the real JSON parsing.
-func parseJson(cfg []byte) (*Config, error) {
+// parseJSON performs the real JSON parsing.
+func parseJSON(cfg []byte) (*Config, error) {
 	var out interface{}
 	var err error
 	if err = json.Unmarshal(cfg, &out); err != nil {
@@ -544,8 +543,8 @@ func parseJson(cfg []byte) (*Config, error) {
 	return &Config{Root: out}, nil
 }
 
-// RenderJson renders a JSON configuration.
-func RenderJson(cfg interface{}) (string, error) {
+// RenderJSON renders a JSON configuration.
+func RenderJSON(cfg interface{}) (string, error) {
 	b, err := json.Marshal(cfg)
 	if err != nil {
 		return "", err
@@ -555,22 +554,22 @@ func RenderJson(cfg interface{}) (string, error) {
 
 // YAML -----------------------------------------------------------------------
 
-// ParseYaml reads a YAML configuration from the given string.
-func ParseYaml(cfg string) (*Config, error) {
-	return parseYaml([]byte(cfg))
+// ParseYAML reads a YAML configuration from the given string.
+func ParseYAML(cfg string) (*Config, error) {
+	return parseYAML([]byte(cfg))
 }
 
-// ParseYamlFile reads a YAML configuration from the given filename.
-func ParseYamlFile(filename string) (*Config, error) {
+// ParseYAMLFile reads a YAML configuration from the given filename.
+func ParseYAMLFile(filename string) (*Config, error) {
 	cfg, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
-	return parseYaml(cfg)
+	return parseYAML(cfg)
 }
 
-// parseYaml performs the real YAML parsing.
-func parseYaml(cfg []byte) (*Config, error) {
+// parseYAML performs the real YAML parsing.
+func parseYAML(cfg []byte) (*Config, error) {
 	var out interface{}
 	var err error
 	if err = yaml.Unmarshal(cfg, &out); err != nil {
@@ -582,8 +581,8 @@ func parseYaml(cfg []byte) (*Config, error) {
 	return &Config{Root: out}, nil
 }
 
-// RenderYaml renders a YAML configuration.
-func RenderYaml(cfg interface{}) (string, error) {
+// RenderYAML renders a YAML configuration.
+func RenderYAML(cfg interface{}) (string, error) {
 	b, err := yaml.Marshal(cfg)
 	if err != nil {
 		return "", err
